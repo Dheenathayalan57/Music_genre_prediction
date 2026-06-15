@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Music Genre Classifier</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #0b0d11;
+      --surface: rgba(13,16,23,0.82);
+      --border:  #1e2330;
+      --accent:  #7c5cfc;
+      --accent2: #c084fc;
+      --text:    #e8eaf0;
+      --muted:   #6b7280;
+      --mono:    'Space Mono', monospace;
+      --sans:    'Space Grotesk', sans-serif;
+    }
+    body { font-family: var(--sans); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem 4rem; position: relative; overflow-x: hidden; }
+    body::before { content:''; position:fixed; inset:0; background:url('https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1600&q=80&auto=format&fit=crop') center center/cover no-repeat; z-index:-2; }
+    body::after  { content:''; position:fixed; inset:0; background:linear-gradient(160deg,rgba(5,6,12,.88) 0%,rgba(10,8,20,.80) 50%,rgba(5,6,12,.92) 100%); z-index:-1; }
+
+    /* ── Header ── */
+    header { text-align:center; margin-bottom:2rem; }
+    .eyebrow { font-family:var(--mono); font-size:.7rem; letter-spacing:.18em; color:var(--accent2); text-transform:uppercase; margin-bottom:.75rem; }
+    h1 { font-size:clamp(2rem,5vw,3.2rem); font-weight:700; line-height:1.1; background:linear-gradient(135deg,#fff 40%,var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .subtitle { margin-top:.75rem; color:var(--muted); font-size:.95rem; }
+    .wave-bar { display:flex; align-items:flex-end; gap:3px; height:28px; margin:1.4rem auto 0; width:fit-content; }
+    .wave-bar span { display:block; width:4px; border-radius:2px; background:var(--accent); opacity:.6; animation:wave 1.4s ease-in-out infinite; }
+    .wave-bar span:nth-child(1){height:8px;animation-delay:0s}.wave-bar span:nth-child(2){height:18px;animation-delay:.1s}.wave-bar span:nth-child(3){height:12px;animation-delay:.2s}.wave-bar span:nth-child(4){height:24px;animation-delay:.3s}.wave-bar span:nth-child(5){height:16px;animation-delay:.4s}.wave-bar span:nth-child(6){height:28px;animation-delay:.5s}.wave-bar span:nth-child(7){height:20px;animation-delay:.35s}.wave-bar span:nth-child(8){height:14px;animation-delay:.25s}.wave-bar span:nth-child(9){height:22px;animation-delay:.15s}.wave-bar span:nth-child(10){height:10px;animation-delay:.05s}
+    @keyframes wave{0%,100%{transform:scaleY(1);opacity:.5}50%{transform:scaleY(1.6);opacity:1}}
+
+    /* ── Layout ── */
+    .layout { width:100%; max-width:820px; display:flex; flex-direction:column; gap:1.25rem; }
+
+    /* ── Card ── */
+    .card { background:var(--surface); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.08); border-radius:20px; padding:2rem; width:100%; box-shadow:0 24px 60px rgba(0,0,0,.6); }
+
+    /* ── Dashboard ── */
+    .dash-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; }
+    @media(max-width:600px){.dash-grid{grid-template-columns:1fr 1fr;}}
+    .dash-stat { background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:14px; padding:1.1rem 1rem; text-align:center; }
+    .dash-val { font-size:1.6rem; font-weight:700; color:var(--accent2); font-family:var(--mono); line-height:1; }
+    .dash-lbl { font-size:.68rem; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; margin-top:.4rem; }
+    .genre-dist { margin-top:1.25rem; display:flex; flex-direction:column; gap:.5rem; }
+    .dist-row { display:flex; align-items:center; gap:.7rem; }
+    .dist-name { font-size:.78rem; font-weight:500; min-width:130px; }
+    .dist-track { flex:1; height:5px; background:rgba(255,255,255,.06); border-radius:3px; overflow:hidden; }
+    .dist-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--accent),var(--accent2)); }
+    .dist-count { font-family:var(--mono); font-size:.68rem; color:var(--muted); min-width:45px; text-align:right; }
+
+    /* ── Tabs ── */
+    .tab-row { display:flex; gap:0; margin-bottom:1.5rem; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    .tab { flex:1; padding:.65rem; font-family:var(--sans); font-size:.85rem; font-weight:600; background:transparent; border:none; color:var(--muted); cursor:pointer; transition:background .15s,color .15s; }
+    .tab.active { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+
+    /* ── Upload zone ── */
+    .upload-zone { border:2px dashed var(--border); border-radius:16px; padding:2.5rem 1rem; text-align:center; cursor:pointer; position:relative; transition:border-color .2s,background .2s; margin-bottom:1rem; }
+    .upload-zone:hover,.upload-zone.dragover { border-color:var(--accent); background:rgba(124,92,252,.06); }
+    .upload-zone input[type=file] { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+    .upload-icon { font-size:2.5rem; margin-bottom:.75rem; display:block; }
+    .upload-title { font-size:1rem; font-weight:600; margin-bottom:.3rem; }
+    .upload-hint { font-size:.8rem; color:var(--muted); }
+    .upload-hint span { color:var(--accent2); }
+    .file-badge { display:none; margin-top:.75rem; padding:.5rem .85rem; background:rgba(124,92,252,.12); border:1px solid rgba(124,92,252,.3); border-radius:8px; font-size:.8rem; color:var(--accent2); word-break:break-all; }
+    .file-badge.visible { display:block; }
+
+    /* ── Genre pills ── */
+    .genre-pill { font-family:var(--mono); font-size:.7rem; padding:.3rem .75rem; border-radius:20px; border:1px solid var(--border); color:var(--muted); background:rgba(255,255,255,.04); letter-spacing:.04em; white-space:nowrap; }
+
+    /* ── Section label ── */
+    .section-label { font-family:var(--mono); font-size:.68rem; letter-spacing:.12em; color:var(--accent); text-transform:uppercase; margin-bottom:1rem; border-bottom:1px solid var(--border); padding-bottom:.5rem; }
+
+    /* ── Grid ── */
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem; }
+    @media(max-width:520px){.grid{grid-template-columns:1fr;}}
+    .field { display:flex; flex-direction:column; gap:.35rem; }
+    .field label { font-size:.8rem; color:var(--muted); font-weight:500; display:flex; justify-content:space-between; }
+    .field label .range-hint { font-family:var(--mono); font-size:.68rem; color:#2e3548; }
+    .field input { background:rgba(0,0,0,.35); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--sans); font-size:.9rem; padding:.55rem .8rem; outline:none; transition:border-color .2s; }
+    .field input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(124,92,252,.18); }
+    .field input::placeholder { color:#2e3548; }
+
+    /* ── Buttons ── */
+    .btn-row { display:flex; gap:.6rem; margin-top:.5rem; }
+    .btn-classify { flex:1; padding:.9rem; border:none; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-family:var(--sans); font-size:1rem; font-weight:600; cursor:pointer; transition:opacity .2s,transform .15s; }
+    .btn-classify:hover { opacity:.9; transform:translateY(-1px); }
+    .btn-classify:active { transform:translateY(0); }
+    .btn-classify:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+    .btn-random { flex:0 0 auto; padding:.9rem 1.2rem; border:1px solid var(--border); border-radius:10px; background:rgba(0,0,0,.3); color:var(--muted); font-family:var(--sans); font-size:.9rem; font-weight:500; cursor:pointer; transition:border-color .2s,color .2s; white-space:nowrap; }
+    .btn-random:hover { border-color:var(--accent2); color:var(--accent2); }
+
+    /* ── Result: Genre ── */
+    .result-genre { text-align:center; padding:2rem 1rem 1.5rem; border-radius:16px; background:linear-gradient(135deg,rgba(124,92,252,.18),rgba(192,132,252,.08)); border:1px solid rgba(124,92,252,.35); margin-bottom:1.2rem; position:relative; overflow:hidden; }
+    .result-genre::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%,rgba(124,92,252,.25) 0%,transparent 70%); pointer-events:none; }
+    .genre-emoji { font-size:3rem; line-height:1; margin-bottom:.5rem; display:block; animation:popIn .4s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes popIn{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+    .genre-tag { font-family:var(--mono); font-size:.68rem; letter-spacing:.16em; color:var(--accent2); text-transform:uppercase; margin-bottom:.4rem; }
+    .genre-name { font-size:2.6rem; font-weight:700; color:#fff; line-height:1; letter-spacing:-.02em; }
+    .genre-source { font-size:.7rem; color:var(--muted); margin-top:.4rem; font-family:var(--mono); }
+    .confidence-badge { display:inline-block; margin-top:.75rem; background:rgba(124,92,252,.25); border:1px solid var(--accent); border-radius:20px; font-family:var(--mono); font-size:.78rem; padding:.3rem 1rem; color:var(--accent2); }
+
+    /* ── Result: Top 3 ── */
+    .top3-label { font-family:var(--mono); font-size:.68rem; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; margin-bottom:.6rem; }
+    .bar-row { display:flex; align-items:center; gap:.7rem; margin-bottom:.55rem; }
+    .bar-label { font-size:.82rem; font-weight:500; min-width:130px; }
+    .bar-track { flex:1; height:6px; background:rgba(255,255,255,.07); border-radius:3px; overflow:hidden; }
+    .bar-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .6s ease; }
+    .bar-pct { font-family:var(--mono); font-size:.72rem; color:var(--muted); min-width:40px; text-align:right; }
+
+    /* ── Result: Emotion card ── */
+    .emotion-card {
+      display:none;
+      align-items:center;
+      gap:1rem;
+      margin-top:1.2rem;
+      padding:1.2rem 1.4rem;
+      border-radius:14px;
+      background:rgba(255,255,255,.04);
+      border:1px solid var(--border);
+      animation:popIn .4s cubic-bezier(.34,1.56,.64,1);
+    }
+    .emotion-emoji { font-size:2.4rem; line-height:1; flex-shrink:0; }
+    .emotion-body { display:flex; flex-direction:column; }
+    .emotion-label { font-family:var(--mono); font-size:.65rem; letter-spacing:.14em; color:var(--muted); text-transform:uppercase; margin-bottom:.25rem; }
+    .emotion-name { font-size:1.4rem; font-weight:700; line-height:1; }
+    .emotion-desc { font-size:.78rem; color:var(--muted); margin-top:.3rem; }
+
+    /* ── History ── */
+    .history-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+    .history-table th { font-family:var(--mono); font-size:.65rem; letter-spacing:.08em; color:var(--muted); text-transform:uppercase; padding:.5rem .75rem; text-align:left; border-bottom:1px solid var(--border); }
+    .history-table td { padding:.6rem .75rem; border-bottom:1px solid rgba(255,255,255,.04); vertical-align:middle; }
+    .history-table tr:last-child td { border-bottom:none; }
+    .h-genre { font-weight:600; }
+    .h-conf,.h-src,.h-time { font-family:var(--mono); font-size:.68rem; color:var(--muted); }
+
+    /* ── Error / Spinner ── */
+    .error-msg { background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); border-radius:10px; padding:.8rem 1rem; font-size:.85rem; color:#f87171; margin-top:1rem; display:none; }
+    .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:8px; }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .empty-history { text-align:center; padding:2rem; color:var(--muted); font-size:.85rem; }
+
+    footer { margin-top:3rem; font-family:var(--mono); font-size:.68rem; color:rgba(255,255,255,.2); letter-spacing:.06em; text-align:center; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <p class="eyebrow">Random Forest · 11 Genres · Spotify Features</p>
+    <h1>Music Genre<br>Classifier</h1>
+    <p class="subtitle">Upload a song or enter audio features to identify its genre and emotion.</p>
+    <div class="wave-bar">
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ══ DASHBOARD ══ -->
+    <div class="card">
+      <p class="section-label">Model Dashboard</p>
+      <div class="dash-grid">
+        <div class="dash-stat"><div class="dash-val">11</div><div class="dash-lbl">Genres</div></div>
+        <div class="dash-stat"><div class="dash-val">50.7%</div><div class="dash-lbl">Test Accuracy</div></div>
+        <div class="dash-stat"><div class="dash-val">17,996</div><div class="dash-lbl">Training Songs</div></div>
+        <div class="dash-stat"><div class="dash-val" id="dashPredictions">0</div><div class="dash-lbl">Predictions Made</div></div>
+      </div>
+
+      <p class="section-label" style="margin-top:1.5rem">Training Data Distribution</p>
+      <div class="genre-dist">
+        <div class="dist-row"><span class="dist-name">🎸 Rock</span>         <div class="dist-track"><div class="dist-fill" style="width:100%"></div></div><span class="dist-count">4,949</span></div>
+        <div class="dist-row"><span class="dist-name">🎼 Indie Alt</span>    <div class="dist-track"><div class="dist-fill" style="width:52%"></div></div><span class="dist-count">2,587</span></div>
+        <div class="dist-row"><span class="dist-name">🎤 Pop</span>          <div class="dist-track"><div class="dist-fill" style="width:51%"></div></div><span class="dist-count">2,524</span></div>
+        <div class="dist-row"><span class="dist-name">🤘 Metal</span>        <div class="dist-track"><div class="dist-fill" style="width:37%"></div></div><span class="dist-count">1,854</span></div>
+        <div class="dist-row"><span class="dist-name">🎧 HipHop</span>       <div class="dist-track"><div class="dist-fill" style="width:29%"></div></div><span class="dist-count">1,447</span></div>
+        <div class="dist-row"><span class="dist-name">🎙️ Alt Music</span>   <div class="dist-track"><div class="dist-fill" style="width:28%"></div></div><span class="dist-count">1,373</span></div>
+        <div class="dist-row"><span class="dist-name">🎺 Blues</span>        <div class="dist-track"><div class="dist-fill" style="width:26%"></div></div><span class="dist-count">1,272</span></div>
+        <div class="dist-row"><span class="dist-name">🪕 Acoustic/Folk</span><div class="dist-track"><div class="dist-fill" style="width:13%"></div></div><span class="dist-count">625</span></div>
+        <div class="dist-row"><span class="dist-name">🎻 Instrumental</span> <div class="dist-track"><div class="dist-fill" style="width:12%"></div></div><span class="dist-count">576</span></div>
+        <div class="dist-row"><span class="dist-name">🪘 Bollywood</span>    <div class="dist-track"><div class="dist-fill" style="width:8%"></div></div><span class="dist-count">402</span></div>
+        <div class="dist-row"><span class="dist-name">🤠 Country</span>      <div class="dist-track"><div class="dist-fill" style="width:8%"></div></div><span class="dist-count">387</span></div>
+      </div>
+    </div>
+
+    <!-- ══ PREDICTOR ══ -->
+    <div class="card">
+      <p class="section-label">Predict Genre &amp; Emotion</p>
+
+      <!-- Genre pills -->
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.5rem">
+        <span class="genre-pill">🪕 Acoustic/Folk</span>
+        <span class="genre-pill">🎙️ Alt Music</span>
+        <span class="genre-pill">🎺 Blues</span>
+        <span class="genre-pill">🪘 Bollywood</span>
+        <span class="genre-pill">🤠 Country</span>
+        <span class="genre-pill">🎧 HipHop</span>
+        <span class="genre-pill">🎼 Indie Alt</span>
+        <span class="genre-pill">🎻 Instrumental</span>
+        <span class="genre-pill">🤘 Metal</span>
+        <span class="genre-pill">🎤 Pop</span>
+        <span class="genre-pill">🎸 Rock</span>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tab-row">
+        <button class="tab active" onclick="switchTab('upload')">🎵 Upload Song</button>
+        <button class="tab"        onclick="switchTab('manual')">🎛 Manual Features</button>
+      </div>
+
+      <!-- TAB 1: Upload -->
+      <div class="tab-content active" id="tab-upload">
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="songFile" accept=".mp3,.wav,.flac,.ogg" onchange="onFileSelected(this)"/>
+          <span class="upload-icon">🎵</span>
+          <div class="upload-title">Drop your song here</div>
+          <div class="upload-hint">or <span>click to browse</span> &nbsp;·&nbsp; .mp3 · .wav · .flac · .ogg</div>
+        </div>
+        <div class="file-badge" id="fileBadge"></div>
+        <div class="btn-row">
+          <button class="btn-classify" id="uploadBtn" onclick="predictFromFile()">Classify from File</button>
+        </div>
+        <div class="error-msg" id="uploadError"></div>
+      </div>
+
+      <!-- TAB 2: Manual -->
+      <div class="tab-content" id="tab-manual">
+        <p class="section-label">Track Info</p>
+        <div class="grid">
+          <div class="field"><label>Popularity <span class="range-hint">0 – 100</span></label><input id="Popularity" type="number" min="0" max="100" placeholder="e.g. 65"/></div>
+          <div class="field"><label>Key <span class="range-hint">0 – 11</span></label><input id="key" type="number" min="0" max="11" placeholder="e.g. 5"/></div>
+          <div class="field"><label>Mode <span class="range-hint">0=minor · 1=major</span></label><input id="mode" type="number" min="0" max="1" placeholder="0 or 1"/></div>
+          <div class="field"><label>Time Signature <span class="range-hint">1 – 7</span></label><input id="time_signature" type="number" min="1" max="7" placeholder="e.g. 4"/></div>
+          <div class="field"><label>Tempo <span class="range-hint">BPM</span></label><input id="tempo" type="number" step="0.01" placeholder="e.g. 120.5"/></div>
+          <div class="field"><label>Duration <span class="range-hint">min/ms</span></label><input id="duration_in min/ms" type="number" step="0.01" placeholder="e.g. 210000"/></div>
+        </div>
+        <p class="section-label">Audio Features</p>
+        <div class="grid">
+          <div class="field"><label>Danceability <span class="range-hint">0.0 – 1.0</span></label><input id="danceability" type="number" step="0.01" min="0" max="1" placeholder="e.g. 0.78"/></div>
+          <div class="field"><label>Energy <span class="range-hint">0.0 – 1.0</span></label><input id="energy" type="number" step="0.01" min="0" max="1" placeholder="e.g. 0.72"/></div>
+          <div class="field"><label>Loudness <span class="range-hint">-60 – 0 dB</span></label><input id="loudness" type="number" step="0.01" min="-60" max="0" placeholder="e.g. -5.5"/></div>
+          <div class="field"><label>Speechiness <span class="range-hint">0.0 – 1.0</span></label><input id="speechiness" type="number" step="0.01" min="0" max="1" placeholder="e.g. 0.05"/></div>
+          <div class="field"><label>Acousticness <span class="range-hint">0.0 – 1.0</span></label><input id="acousticness" type="number" step="0.01" min="0" max="1" placeholder="e.g. 0.15"/></div>
+          <div class="field"><label>Instrumentalness <span class="range-hint">0.0 – 1.0</span></label><input id="instrumentalness" type="number" step="0.01" min="0" max="1" placeholder="e.g. 0.001"/></div>
+          <div class="field"><label>Liveness <span class="range-hint">0.0 – 1.0</span></label><input id="liveness" type="number" step="0.01" min="0" max="1" placeholder="e.g. 0.12"/></div>
+          <div class="field"><label>Valence <span class="range-hint">0.0 – 1.0</span></label><input id="valence" type="number" step="0.01" min="0" max="1" placeholder="e.g. 0.65"/></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-classify" id="classifyBtn" onclick="classify()">Classify Genre</button>
+          <button class="btn-random" onclick="fillRandom()">🎲 Random</button>
+        </div>
+        <div class="error-msg" id="errorMsg"></div>
+      </div>
+
+      <!-- ── Shared result ── -->
+      <div id="result" style="display:none;margin-top:1.5rem">
+
+        <!-- Genre result -->
+        <div class="result-genre">
+          <span class="genre-emoji" id="genreEmoji">🎵</span>
+          <div class="genre-tag">Predicted Genre</div>
+          <div class="genre-name" id="genreName">—</div>
+          <div class="genre-source" id="genreSource"></div>
+          <div class="confidence-badge" id="confidenceBadge">—</div>
+        </div>
+
+        <!-- Top 3 -->
+        <p class="top3-label">Top 3 Predictions</p>
+        <div id="top3Bars"></div>
+
+        <!-- Emotion card -->
+        <div class="emotion-card" id="emotionCard">
+          <span class="emotion-emoji" id="emotionEmoji">😊</span>
+          <div class="emotion-body">
+            <div class="emotion-label">Detected Emotion</div>
+            <div class="emotion-name" id="emotionName">—</div>
+            <div class="emotion-desc" id="emotionDesc">—</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══ HISTORY ══ -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <p class="section-label" style="margin:0;border:none;padding:0">Prediction History</p>
+        <button onclick="clearHistory()" style="font-size:.72rem;color:var(--muted);background:none;border:none;cursor:pointer;font-family:var(--mono)">Clear</button>
+      </div>
+      <div id="historyContainer">
+        <div class="empty-history" id="emptyHistory">No predictions yet — classify a song above.</div>
+        <table class="history-table" id="historyTable" style="display:none">
+          <thead><tr><th>#</th><th>Genre</th><th>Emotion</th><th>Confidence</th><th>Source</th><th>Time</th></tr></thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>MUSIC GENRE CLASSIFIER &nbsp;·&nbsp; FASTAPI + RANDOM FOREST + EMOTION</footer>
+
+  <script>
+    const API = 'http://127.0.0.1:5001';
+    let predCount = 0;
+    let history   = [];
+
+    const GENRE_EMOJI = {
+      'Rock':'🎸','Pop':'🎤','HipHop':'🎧','Hip-Hop':'🎧','Metal':'🤘',
+      'Blues':'🎺','Bollywood':'🪘','Country':'🤠','Acoustic/Folk':'🪕',
+      'Instrumental':'🎻','Indie Alt':'🎼','Alt_Music':'🎙️','Alt Music':'🎙️',
+      'Classical':'🎹','Jazz':'🎷','Reggae':'🌴',
+    };
+    function getEmoji(genre) {
+      if (GENRE_EMOJI[genre]) return GENRE_EMOJI[genre];
+      for (const [k,v] of Object.entries(GENRE_EMOJI)) {
+        if (genre.toLowerCase().includes(k.toLowerCase())) return v;
+      }
+      return '🎵';
+    }
+
+    // ── Tab switching
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach((t,i) => {
+        t.classList.toggle('active',(name==='upload'&&i===0)||(name==='manual'&&i===1));
+      });
+      document.getElementById('tab-upload').classList.toggle('active', name==='upload');
+      document.getElementById('tab-manual').classList.toggle('active', name==='manual');
+      document.getElementById('result').style.display = 'none';
+    }
+
+    // ── Drag and drop
+    const zone = document.getElementById('uploadZone');
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) {
+        document.getElementById('songFile').files = e.dataTransfer.files;
+        onFileSelected({ files: e.dataTransfer.files });
+      }
+    });
+    function onFileSelected(input) {
+      const f = input.files[0]; if (!f) return;
+      const badge = document.getElementById('fileBadge');
+      badge.textContent = `📎 ${f.name}  (${(f.size/1024/1024).toFixed(2)} MB)`;
+      badge.classList.add('visible');
+    }
+
+    // ── Predict from file
+    async function predictFromFile() {
+      const file  = document.getElementById('songFile').files[0];
+      const errEl = document.getElementById('uploadError');
+      errEl.style.display = 'none';
+      if (!file) { errEl.textContent='Select a song file first.'; errEl.style.display='block'; return; }
+      const btn = document.getElementById('uploadBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Analysing audio…';
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${API}/predict-file`, { method:'POST', body:formData });
+        if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.detail||`Error ${res.status}`); }
+        const data = await res.json();
+        showResult(data, `📎 ${file.name}`);
+        addHistory(data, file.name);
+      } catch(err) {
+        errEl.textContent = err.message.includes('Failed to fetch')
+          ? 'Cannot reach API. Make sure python app.py is running.'
+          : err.message;
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Classify from File';
+      }
+    }
+
+    // ── Predict manual
+    async function classify() {
+      const btn   = document.getElementById('classifyBtn');
+      const errEl = document.getElementById('errorMsg');
+      errEl.style.display = 'none';
+      const fields = ['Popularity','danceability','energy','key','loudness','mode',
+                      'speechiness','acousticness','instrumentalness','liveness',
+                      'valence','tempo','duration_in min/ms','time_signature'];
+      const payload = {};
+      for (const f of fields) {
+        const el = document.getElementById(f);
+        const v  = el ? el.value.trim() : '';
+        if (v === '') { errEl.textContent=`Please fill in: ${f}`; errEl.style.display='block'; el&&el.focus(); return; }
+        payload[f] = parseFloat(v);
+      }
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Classifying…';
+      try {
+        const res = await fetch(`${API}/predict`, {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+        });
+        if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.detail||`Error ${res.status}`); }
+        const data = await res.json();
+        showResult(data, 'Manual features');
+        addHistory(data, 'Manual');
+      } catch(err) {
+        errEl.textContent = err.message.includes('Failed to fetch')
+          ? 'Cannot reach API. Make sure python app.py is running.'
+          : err.message;
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Classify Genre';
+      }
+    }
+
+    // ── Show result (shared for both tabs)
+    function showResult(data, source) {
+      const genre = data.predicted_genre || `Class ${data.predicted_class}`;
+      document.getElementById('genreEmoji').textContent      = getEmoji(genre);
+      document.getElementById('genreName').textContent       = genre;
+      document.getElementById('genreSource').textContent     = source || '';
+      document.getElementById('confidenceBadge').textContent = data.confidence || '—';
+
+      // Top 3 bars
+      const top3El = document.getElementById('top3Bars');
+      top3El.innerHTML = '';
+      (data.top3||[]).forEach(item => {
+        const pct = parseFloat(item.confidence)||0;
+        const row = document.createElement('div');
+        row.className = 'bar-row';
+        row.innerHTML = `
+          <span class="bar-label">${getEmoji(item.genre)} ${item.genre}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:0%" data-target="${pct}"></div></div>
+          <span class="bar-pct">${item.confidence}</span>
+        `;
+        top3El.appendChild(row);
+      });
+      requestAnimationFrame(() => {
+        document.querySelectorAll('.bar-fill').forEach(el => { el.style.width = el.dataset.target+'%'; });
+      });
+
+      // Emotion card — shown for BOTH file upload and manual
+      const emotionCard = document.getElementById('emotionCard');
+      if (data.emotion) {
+        document.getElementById('emotionEmoji').textContent = data.emotion.emoji  || '🎵';
+        document.getElementById('emotionName').textContent  = data.emotion.emotion || '—';
+        document.getElementById('emotionName').style.color  = data.emotion.color   || '#e8eaf0';
+        document.getElementById('emotionDesc').textContent  = data.emotion.description || '';
+        emotionCard.style.display = 'flex';
+      } else {
+        emotionCard.style.display = 'none';
+      }
+
+      const resultEl = document.getElementById('result');
+      resultEl.style.display = 'block';
+      resultEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+
+    // ── History
+    function addHistory(data, source) {
+      predCount++;
+      document.getElementById('dashPredictions').textContent = predCount;
+      const genre   = data.predicted_genre || `Class ${data.predicted_class}`;
+      const emotion = data.emotion ? `${data.emotion.emoji} ${data.emotion.emotion}` : '—';
+      history.unshift({ genre, emotion, confidence: data.confidence||'—', source, time: new Date().toLocaleTimeString() });
+      if (history.length > 20) history.pop();
+      renderHistory();
+    }
+    function renderHistory() {
+      const empty = document.getElementById('emptyHistory');
+      const table = document.getElementById('historyTable');
+      const tbody = document.getElementById('historyBody');
+      if (history.length === 0) { empty.style.display='block'; table.style.display='none'; return; }
+      empty.style.display = 'none';
+      table.style.display = 'table';
+      tbody.innerHTML = history.map((h,i) => `
+        <tr>
+          <td class="h-time">${history.length-i}</td>
+          <td class="h-genre">${getEmoji(h.genre)} ${h.genre}</td>
+          <td class="h-time">${h.emotion}</td>
+          <td class="h-conf">${h.confidence}</td>
+          <td class="h-src">${h.source}</td>
+          <td class="h-time">${h.time}</td>
+        </tr>
+      `).join('');
+    }
+    function clearHistory() {
+      history = []; predCount = 0;
+      document.getElementById('dashPredictions').textContent = 0;
+      renderHistory();
+    }
+
+    // ── Random fill
+    function fillRandom() {
+      const r = (min,max,dec=2) => parseFloat((Math.random()*(max-min)+min).toFixed(dec));
+      const vals = {
+        Popularity:Math.round(r(20,95,0)), danceability:r(.1,.99), energy:r(.1,.99),
+        key:Math.round(r(0,11,0)), loudness:r(-30,-1), mode:Math.round(Math.random()),
+        speechiness:r(.02,.40), acousticness:r(.01,.95), instrumentalness:r(0,.80),
+        liveness:r(.05,.40), valence:r(.05,.95), tempo:r(60,200,1),
+        'duration_in min/ms':Math.round(r(120000,360000,0)),
+        time_signature:[3,4,4,4,5][Math.floor(Math.random()*5)],
+      };
+      Object.entries(vals).forEach(([k,v])=>{ const el=document.getElementById(k); if(el) el.value=v; });
+      document.getElementById('result').style.display='none';
+      document.getElementById('errorMsg').style.display='none';
+    }
+
+    document.addEventListener('keydown', e => { if(e.key==='Enter') classify(); });
+  </script>
+</body>
+</html>
